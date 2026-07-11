@@ -31,9 +31,27 @@ export class GameEngine {
             const room = this.activeRooms[roomId];
             if (!room.isStarted) return;
 
-            // 1. O'YINCHILAR TAYMERLARINI YANGILASH
+            // 1. O'YINCHILAR TAYMERLARINI YANGILASH + USHLAB TURILGAN AMALLAR
             Object.values(room.players).forEach((player) => {
                 BaseCharacter.updateTimers(player);
+
+                const charLogic = getCharacterLogic(player.characterType);
+
+                // SHIFT ushlab turilgan bo'lsa, har tikda personajning maxsus
+                // effektini qo'llaymiz (ko'rinmaslik, tezlik, muzlatish va h.k.)
+                if (player.isHoldingAbility && player.stamina > 0) {
+                    charLogic.applyHeldAbility(player, room);
+                }
+
+                // ENTER/SICHQONCHA ushlab turilgan bo'lsa - avtomatik otish
+                // (stamina va cooldown yetarli bo'lgandagina zarba beriladi)
+                if (player.isHoldingAttack) {
+                    if (player.attackCooldown <= 0 && player.stamina >= charLogic.attackStaminaCost) {
+                        player.stamina -= charLogic.attackStaminaCost;
+                        player.attackCooldown = BaseCharacter.ATTACK_COOLDOWN_TICKS;
+                        charLogic.handleAttack(player, room, player.lastAttackAngle);
+                    }
+                }
             });
 
             // 2. BOTLAR FIZIKASI VA SHeLLI AI
@@ -89,8 +107,8 @@ export class GameEngine {
                 else if (bot.x > p.x + 5) bot.x -= this.BOT_SPEED;
 
                 if (this.checkOverlap({ x: bot.x, y: bot.y, w: 32, h: 32 }, { x: p.x, y: p.y, w: 32, h: 32 })) {
-                    // Knight daxlsizlik qalqoni tekshiruvi
-                    if (p.characterType === 'knight' && p.abilityDuration > 0) {
+                    // Knight qalqoni tekshiruvi: endi isHoldingAbility orqali (bosib turilgancha himoya qiladi)
+                    if (p.characterType === 'knight' && p.isHoldingAbility) {
                         // Qalqon faol, zarar yetmaydi
                     } else {
                         p.hp -= 0.5;
@@ -102,7 +120,10 @@ export class GameEngine {
                         p.y = 500;
                         p.isInvisible = false;
                         p.speedMultiplier = 1;
-                        p.abilityDuration = 0;
+                        p.isHoldingAbility = false;
+                        p.isHoldingAttack = false;
+                        p.stamina = 100;
+                        p.staminaRegenDelay = 0;
                     }
                 }
             }
@@ -155,15 +176,24 @@ export class GameEngine {
 
             let bulletDestroyed = false;
 
+            // Qilich/katana zarbalari uchun ancha kattaroq hitbox ishlatamiz,
+            // chunki vizual tasvirdagi tig' uzun va yoysimon harakat qiladi -
+            // kichik nuqta shaklidagi hitbox ko'p hollarda tegmay o'tib ketardi
+            const isMelee = bullet.bulletType === 'melee';
+            const hitW = isMelee ? 54 : 8;
+            const hitH = isMelee ? 44 : 8;
+            const hitX = isMelee ? bullet.x - hitW / 2 : bullet.x;
+            const hitY = isMelee ? bullet.y - hitH / 2 : bullet.y;
+
             for (let j = room.bots.length - 1; j >= 0; j--) {
                 const bot = room.bots[j];
-                if (this.checkOverlap({ x: bullet.x, y: bullet.y, w: 8, h: 8 }, { x: bot.x, y: bot.y, w: 32, h: 32 })) {
+                if (this.checkOverlap({ x: hitX, y: hitY, w: hitW, h: hitH }, { x: bot.x, y: bot.y, w: 32, h: 32 })) {
                     
-                    // Har bir o'q turiga qarab shaxsiy zarar miqdori
-                    if (bullet.bulletType === 'fireball') bot.hp -= 40;
-                    else if (bullet.bulletType === 'arrow') bot.hp -= 20;
-                    else if (bullet.bulletType === 'melee') bot.hp -= 30; // Qilich zarbasi kuchliroq
-                    else bot.hp -= 25;
+                    // Har bir o'q turiga qarab shaxsiy zarar miqdori (yangi balans)
+                    if (bullet.bulletType === 'fireball') bot.hp -= 30;       // Sehrgar: kuchli, lekin stamina tez ketadi
+                    else if (bullet.bulletType === 'arrow') bot.hp -= 10;     // Kamonchi: yengil zarba
+                    else if (bullet.bulletType === 'melee') bot.hp -= 20;     // Ritsar/Samuray: o'rtacha, stamina sekin ketadi
+                    else bot.hp -= 20;
 
                     bulletDestroyed = true;
                     if (bot.hp <= 0) room.bots.splice(j, 1);

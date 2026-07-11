@@ -7,11 +7,12 @@ export interface PlayerState {
     hp: number;
     isInvisible: boolean;
     speedMultiplier: number;
-    abilityCooldown: number;
-    abilityDuration: number;
-    stamina: number;          // 0-100: hujum va qobiliyat uchun sarflanadigan energiya
-    attackCooldown: number;   // Hujumlar orasidagi eng qisqa vaqt (spam qilishning oldini oladi)
-    isHoldingShield: boolean; // Faqat Ritsar uchun: SHIFT bosib turilganda true
+    stamina: number;              // 0-100: hujum va qobiliyat uchun sarflanadigan energiya
+    attackCooldown: number;       // Hujumlar orasidagi eng qisqa vaqt (spam qilishning oldini oladi)
+    staminaRegenDelay: number;    // Ushlab turish tugagach, tiklanish boshlanguncha kutish (tikda)
+    isHoldingAbility: boolean;    // Barcha personajlar uchun: SHIFT bosib turilganda true
+    isHoldingAttack: boolean;     // Barcha personajlar uchun: ENTER/sichqoncha bosib turilganda true
+    lastAttackAngle: number;      // ENTER ushlab turilganda avtomatik otish uchun saqlangan burchak
 }
 
 export interface BotState {

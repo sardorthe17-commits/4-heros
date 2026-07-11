@@ -100,22 +100,20 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 7. STANDART HUJUM (ENTER / SICHQONCHA)
-    socket.on('playerAttackInRoom', (data: { roomId: string, angle: number }) => {
-        roomManager.handlePlayerAttack(socket, data.roomId, data.angle);
+    // 7. STANDART HUJUM (ENTER / SICHQONCHA) - endi bosib turish tizimi
+    socket.on('startAttackInRoom', (data: { roomId: string, angle: number }) => {
+        roomManager.startAttack(socket, data.roomId, data.angle);
+    });
+    socket.on('stopAttackInRoom', (roomId: string) => {
+        roomManager.stopAttack(socket, roomId);
     });
 
-    // 8. MAXSUS QOBILIYAT (SHIFT)
-    socket.on('useAbilityInRoom', (data: { roomId: string }) => {
-        roomManager.handlePlayerAbility(socket, data.roomId);
+    // 8. MAXSUS QOBILIYAT (SHIFT) - barcha personajlar uchun bosib turish tizimi
+    socket.on('startAbilityInRoom', (roomId: string) => {
+        roomManager.startAbility(socket, roomId);
     });
-
-    // 8b. RITSAR QALQONI: SHIFT bosib turish / qo'yib yuborish
-    socket.on('startShieldInRoom', (roomId: string) => {
-        roomManager.startShield(socket, roomId);
-    });
-    socket.on('stopShieldInRoom', (roomId: string) => {
-        roomManager.stopShield(socket, roomId);
+    socket.on('stopAbilityInRoom', (roomId: string) => {
+        roomManager.stopAbility(socket, roomId);
     });
 
     // 9. TARMOQDAN UZILISH

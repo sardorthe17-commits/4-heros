@@ -219,41 +219,42 @@ function launchGame(socket, roomId) {
 
         // DIQQAT: Phaser to'liq yuklanib bo'ldi, endi serverdan o'yinchimizni so'raymiz!
         socket.emit('playerReadyInRoom', roomId);
+
+        // SHIFT: barcha personajlar uchun umumiy - bosib turilgancha qobiliyat faol,
+        // stamina ketaveradi; qo'yib yuborilsa effekt tugaydi va biroz kutib tiklanadi
         this.input.keyboard.on('keydown-SHIFT', () => {
             if (!currentCharacter) return;
-            if (currentCharacter.characterType === 'knight') {
-                // Ritsar: bosib turilgancha qalqon faol, stamina ketaveradi
-                socket.emit('startShieldInRoom', roomId);
-            } else {
-                // Boshqa personajlar: bir marta bosilganda ishlaydigan qobiliyat
-                socket.emit('useAbilityInRoom', { roomId: roomId });
-            }
+            socket.emit('startAbilityInRoom', roomId);
         });
         this.input.keyboard.on('keyup-SHIFT', () => {
             if (!currentCharacter) return;
-            if (currentCharacter.characterType === 'knight') {
-                // Qo'yib yuborilganda qalqon o'chadi, stamina tiklana boshlaydi
-                socket.emit('stopShieldInRoom', roomId);
-            }
+            socket.emit('stopAbilityInRoom', roomId);
         });
-        // Xavfsizlik: brauzer tabidan chiqib ketilsa ham qalqon "yopishib qolmasin"
+        // Xavfsizlik: brauzer tabidan chiqib ketilsa ham effekt "yopishib qolmasin"
         window.addEventListener('blur', () => {
-            if (currentCharacter && currentCharacter.characterType === 'knight') {
-                socket.emit('stopShieldInRoom', roomId);
-            }
-        });
-        // ENTER bosilganda otish
-        this.input.keyboard.on('keydown-ENTER', () => {
-            if (!currentCharacter) return;
-            let angle = (lastDirection === 'right') ? 0 : Math.PI; 
-            socket.emit('playerAttackInRoom', { roomId: roomId, angle: angle });
+            if (currentCharacter) socket.emit('stopAbilityInRoom', roomId);
         });
 
-        // SICHQONCHA bosilganda otish
+        // ENTER: bosib turilgancha avtomatik hujum qiladi, stamina ketaveradi
+        this.input.keyboard.on('keydown-ENTER', () => {
+            if (!currentCharacter) return;
+            let angle = (lastDirection === 'right') ? 0 : Math.PI;
+            socket.emit('startAttackInRoom', { roomId: roomId, angle: angle });
+        });
+        this.input.keyboard.on('keyup-ENTER', () => {
+            if (!currentCharacter) return;
+            socket.emit('stopAttackInRoom', roomId);
+        });
+
+        // SICHQONCHA: bosib turilgancha avtomatik hujum qiladi
         this.input.on('pointerdown', () => {
             if (!currentCharacter) return;
-            let angle = (lastDirection === 'right') ? 0 : Math.PI; 
-            socket.emit('playerAttackInRoom', { roomId: roomId, angle: angle });
+            let angle = (lastDirection === 'right') ? 0 : Math.PI;
+            socket.emit('startAttackInRoom', { roomId: roomId, angle: angle });
+        });
+        this.input.on('pointerup', () => {
+            if (!currentCharacter) return;
+            socket.emit('stopAttackInRoom', roomId);
         });
 
         // SERVERDAN DUNYO YANGILANISHINI ESHITISH
@@ -276,7 +277,7 @@ function launchGame(socket, roomId) {
                     currentCharacter.setAlpha(1);
                 }
 
-                if (myData.characterType === 'knight' && myData.isHoldingShield) {
+                if (myData.characterType === 'knight' && myData.isHoldingAbility) {
                     currentCharacter.setTint(0x00aaff);
                     currentCharacter.shieldActive = true;
                 } else {
@@ -325,7 +326,7 @@ function launchGame(socket, roomId) {
                 }
 
                 // Knight qalqoni effekti
-                if (pData.characterType === 'knight' && pData.isHoldingShield) {
+                if (pData.characterType === 'knight' && pData.isHoldingAbility) {
                     otherPlayers[id].setTint(0x00aaff);
                     otherPlayers[id].shieldActive = true;
                 } else {
@@ -399,6 +400,20 @@ function launchGame(socket, roomId) {
 
             // O'QLAR VA QILICH ZARBALARINI CHIZISH
             serverBullets.forEach((bData) => {
+                const facingLeft = bData.vx < 0;
+                const dir = facingLeft ? -1 : 1;
+
+                // Qilich/katana zarbasi uchun egasining REAL sprite pozitsiyasiga
+                // "yopishtiramiz" - shunda tig' xarakterdan uzoqlashib, qiyshiq
+                // ko'rinmaydi, balki qo'lidan chiqayotgandek tabiiy tuyuladi
+                let ownerSprite = null;
+                if (bData.playerId === socket.id) ownerSprite = currentCharacter;
+                else ownerSprite = otherPlayers[bData.playerId];
+
+                const isMeleeType = (bData.bulletType === 'melee');
+                const posX = (isMeleeType && ownerSprite) ? ownerSprite.x + dir * 14 : bData.x;
+                const posY = (isMeleeType && ownerSprite) ? ownerSprite.y + 2 : bData.y;
+
                 if (!bulletSprites[bData.id]) {
                     const shooter = serverPlayers[bData.playerId];
                     let currentTexture = 'projectile_normal';
@@ -410,39 +425,41 @@ function launchGame(socket, roomId) {
                         else if (shooter.characterType === 'mage') currentTexture = 'projectile_fireball';
                     }
 
-                    let bSprite = this.physics.add.sprite(bData.x, bData.y, currentTexture);
+                    let bSprite = this.physics.add.sprite(posX, posY, currentTexture);
                     if (bSprite.body) bSprite.body.setAllowGravity(false);
                     // Chapga qarab hujum qilinganda qurol tasvirini gorizontal aylantirish
-                    const facingLeft = bData.vx < 0;
                     if (facingLeft) bSprite.setFlipX(true);
-                    const dir = facingLeft ? -1 : 1;
 
                     if (currentTexture === 'melee_knight') {
-                        // RITSAR: tepadan pastga qarab zarba (dastasi yaqinida pivot)
-                        bSprite.setOrigin(0.15, 0.5);
-                        bSprite.angle = dir * -70; // Yuqoriga ko'tarilgan holatdan boshlaydi
+                        // RITSAR: tepadan pastga qarab qisqaroq, ravon zarba
+                        // MUHIM: flip qilinganda pivot nuqtasi ham oynadek aylantirilishi kerak,
+                        // aks holda qilich "dasta"dan emas, tig' uchidan aylanib ketadi (qiyshiq ko'rinish)
+                        const originX = facingLeft ? 0.8 : 0.2;
+                        bSprite.setOrigin(originX, 0.5);
+                        bSprite.angle = dir * -35; // Yengil ko'tarilgan holatdan boshlaydi
                         this.tweens.add({
                             targets: bSprite,
-                            angle: dir * 25, // Pastga qarab tez tushadi
-                            duration: 160,
+                            angle: dir * 30, // Pastga qarab silliq tushadi
+                            duration: 180,
                             ease: 'Cubic.Out'
                         });
                     } else if (currentTexture === 'melee_samurai') {
-                        // SAMURAY: keng yoysimon gorizontal/diagonal kesish
-                        bSprite.setOrigin(0.1, 0.5);
-                        bSprite.angle = dir * -40;
+                        // SAMURAY: qisqaroq, tezroq gorizontal kesish
+                        const originX = facingLeft ? 0.85 : 0.15;
+                        bSprite.setOrigin(originX, 0.5);
+                        bSprite.angle = dir * -25;
                         this.tweens.add({
                             targets: bSprite,
-                            angle: dir * 40,
-                            duration: 130,
+                            angle: dir * 25,
+                            duration: 150,
                             ease: 'Sine.Out'
                         });
                     }
 
                     bulletSprites[bData.id] = bSprite;
                 } else {
-                    bulletSprites[bData.id].x = bData.x;
-                    bulletSprites[bData.id].y = bData.y;
+                    bulletSprites[bData.id].x = posX;
+                    bulletSprites[bData.id].y = posY;
                 }
             });
         });

@@ -2,6 +2,9 @@ import { BaseCharacter } from './base.character';
 import { PlayerState, RoomState } from '../types';
 
 export class MageCharacter extends BaseCharacter {
+    // Sehrgar: zarba 30 ta HP oladi (eng kuchli), lekin stamina tez ketadi
+    public attackStaminaCost = 25;
+
     handleAttack(player: PlayerState, room: RoomState, angle: number): void {
         room.bulletIdCounter++;
         room.bullets.push({
@@ -17,14 +20,19 @@ export class MageCharacter extends BaseCharacter {
         });
     }
 
-    handleAbility(player: PlayerState, room: RoomState): void {
-        // 250px radiusdagi barcha botlarni muzlatish
+    // Sehrgar uchun SHIFT = atrofdagi botlarni muzlatish. Bosib turilgancha
+    // radiusdagi botlar muzlab turadi (har tikda yangilanadi), qo'yib
+    // yuborilsa muzlash tabiiy ravishda tugab boradi.
+    applyHeldAbility(player: PlayerState, room: RoomState): void {
         room.bots.forEach(bot => {
             const dist = Math.hypot(bot.x - player.x, bot.y - player.y);
             if (dist < 250) {
-                bot.freezeDuration = 260; // ~4 soniya qotib turadi
+                bot.freezeDuration = Math.max(bot.freezeDuration, 10);
             }
         });
-        player.abilityCooldown = 500; // Mage cooldown
+    }
+
+    releaseHeldAbility(player: PlayerState, room: RoomState): void {
+        // Bo'sh - muzlash effekti o'zi asta-sekin tugaydi (freezeDuration kamayadi)
     }
 }

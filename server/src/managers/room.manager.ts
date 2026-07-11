@@ -36,11 +36,12 @@ export class RoomManager {
             hp: 100,
             isInvisible: false,
             speedMultiplier: 1,
-            abilityCooldown: 0,
-            abilityDuration: 0,
             stamina: 100,
             attackCooldown: 0,
-            isHoldingShield: false
+            staminaRegenDelay: 0,
+            isHoldingAbility: false,
+            isHoldingAttack: false,
+            lastAttackAngle: 0
         };
 
         socket.join(roomId);
@@ -67,69 +68,67 @@ export class RoomManager {
         }
     }
 
-    // O'YINCHI OTGANDA (ENTER yoki Sichqoncha bosilganda)
-    public handlePlayerAttack(socket: Socket, roomId: string, angle: number): void {
+    // ENTER/SICHQONCHA BOSIB TURILGANDA: avtomatik-otish holatini yoqamiz
+    public startAttack(socket: Socket, roomId: string, angle: number): void {
         const room = this.activeRooms[roomId];
         if (!room || !room.isStarted) return;
 
         const player = room.players[socket.id];
         if (!player) return;
 
-        // Spam qilishning oldini olish: tez-tez ketma-ket bosilsa yoki
-        // stamina yetarli bo'lmasa hujum ishlamaydi
-        if (player.attackCooldown > 0) return;
-        if (player.stamina < BaseCharacter.ATTACK_STAMINA_COST) return;
+        player.isHoldingAttack = true;
+        player.lastAttackAngle = angle;
 
-        player.stamina -= BaseCharacter.ATTACK_STAMINA_COST;
+        // Bosilgan zahoti, agar imkon bo'lsa, birinchi zarbani darrov beramiz
+        this.tryFireAttack(player, room);
+    }
+
+    // ENTER/SICHQONCHA QO'YIB YUBORILGANDA: avtomatik-otishni to'xtatamiz
+    public stopAttack(socket: Socket, roomId: string): void {
+        const room = this.activeRooms[roomId];
+        if (!room) return;
+        const player = room.players[socket.id];
+        if (!player) return;
+        player.isHoldingAttack = false;
+    }
+
+    // Haqiqiy zarbani berish (stamina va cooldown yetarli bo'lsagina)
+    // Bu funksiya ham darhol bosilganda, ham har tikda (auto-fire) chaqiriladi
+    public tryFireAttack(player: PlayerState, room: RoomState): void {
+        if (player.attackCooldown > 0) return;
+
+        const charLogic = getCharacterLogic(player.characterType);
+        if (player.stamina < charLogic.attackStaminaCost) return;
+
+        player.stamina -= charLogic.attackStaminaCost;
         player.attackCooldown = BaseCharacter.ATTACK_COOLDOWN_TICKS;
 
-        // Factory funksiyamiz orqali personajning shaxsiy klassini olamiz
-        const charLogic = getCharacterLogic(player.characterType);
-        // O'sha personajning shaxsiy handleAttack logikasi ishga tushadi
-        charLogic.handleAttack(player, room, angle);
+        charLogic.handleAttack(player, room, player.lastAttackAngle);
     }
 
-    // O'YINCHI QOBILIYAT ISHLATGANDA (SHIFT bosilganda)
-    public handlePlayerAbility(socket: Socket, roomId: string): void {
+    // SHIFT BOSIB TURILGANDA: barcha personajlar uchun umumiy - qobiliyat faollashadi
+    public startAbility(socket: Socket, roomId: string): void {
         const room = this.activeRooms[roomId];
         if (!room || !room.isStarted) return;
 
         const player = room.players[socket.id];
-        // Agar cooldown tugamagan yoki stamina yetarli bo'lmasa, qobiliyat ishlamaydi
-        if (!player || player.abilityCooldown > 0) return;
-        if (player.stamina < BaseCharacter.ABILITY_STAMINA_COST) return;
-
-        player.stamina -= BaseCharacter.ABILITY_STAMINA_COST;
-
-        // Har bir personajning shaxsiy SHIFT qobiliyati klassi ishga tushadi
-        const charLogic = getCharacterLogic(player.characterType);
-        charLogic.handleAbility(player, room);
-        
-        // Klientga effektlarni chizishi uchun xabar beramiz
-        this.io.to(roomId).emit('abilityUsed', { playerId: socket.id, characterType: player.characterType });
-    }
-
-    // RITSAR QALQONI: SHIFT bosib turilganda ishga tushadi (faqat Knight uchun)
-    public startShield(socket: Socket, roomId: string): void {
-        const room = this.activeRooms[roomId];
-        if (!room || !room.isStarted) return;
-
-        const player = room.players[socket.id];
-        if (!player || player.characterType !== 'knight') return;
+        if (!player) return;
         if (player.stamina <= 0) return; // Stamina tugagan bo'lsa yoqilmaydi
 
-        player.isHoldingShield = true;
+        player.isHoldingAbility = true;
     }
 
-    // RITSAR QALQONI: SHIFT qo'yib yuborilganda o'chadi
-    public stopShield(socket: Socket, roomId: string): void {
+    // SHIFT QO'YIB YUBORILGANDA: qobiliyat effekti bekor qilinadi
+    public stopAbility(socket: Socket, roomId: string): void {
         const room = this.activeRooms[roomId];
         if (!room) return;
 
         const player = room.players[socket.id];
         if (!player) return;
 
-        player.isHoldingShield = false;
+        player.isHoldingAbility = false;
+        const charLogic = getCharacterLogic(player.characterType);
+        charLogic.releaseHeldAbility(player, room);
     }
 
     // O'yinchi xonadan chiqib ketganda yoki uzilganda

@@ -6,6 +6,7 @@ import cors from 'cors';
 import { RoomState } from './types';
 import { RoomManager } from './managers/room.manager';
 import { GameEngine } from './managers/game.engine';
+import { ConfigService } from '@nestjs/config';
 
 const app = express();
 app.use(cors());
@@ -122,8 +123,7 @@ io.on('connection', (socket) => {
         roomManager.leavePlayer(socket);
     });
 });
-
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 server.listen(PORT, () => {
     console.log(`Server professional modda ${PORT}-portda ishlamoqda.`);
 });

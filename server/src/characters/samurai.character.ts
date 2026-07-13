@@ -11,7 +11,7 @@ export class SamuraiCharacter extends BaseCharacter {
             id: 'bullet_' + room.bulletIdCounter,
             playerId: player.id,
             x: player.x + (Math.cos(angle) * 20),
-            y: player.y + 10,
+            y: player.y,
             vx: Math.cos(angle) * 220, // Katananing kesish tezligi
             vy: Math.sin(angle) * 220,
             color: player.color,

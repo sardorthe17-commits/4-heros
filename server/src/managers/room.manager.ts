@@ -100,7 +100,7 @@ export class RoomManager {
         const charLogic = getCharacterLogic(player.characterType);
         if (player.stamina < charLogic.attackStaminaCost) return;
 
-        player.stamina -= charLogic.attackStaminaCost;
+        BaseCharacter.spendStamina(player, charLogic.attackStaminaCost);
         player.attackCooldown = BaseCharacter.ATTACK_COOLDOWN_TICKS;
 
         charLogic.handleAttack(player, room, player.lastAttackAngle);

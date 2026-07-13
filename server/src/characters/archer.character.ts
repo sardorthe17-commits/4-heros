@@ -11,7 +11,7 @@ export class ArcherCharacter extends BaseCharacter {
             id: 'bullet_' + room.bulletIdCounter,
             playerId: player.id,
             x: player.x + 12,
-            y: player.y + 10,
+            y: player.y,
             vx: Math.cos(angle) * 1000, // Judayam tez uchadi
             vy: Math.sin(angle) * 1000,
             color: player.color,

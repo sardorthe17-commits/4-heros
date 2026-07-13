@@ -33,9 +33,18 @@ export class GameEngine {
 
             // 1. O'YINCHILAR TAYMERLARINI YANGILASH + USHLAB TURILGAN AMALLAR
             Object.values(room.players).forEach((player) => {
+                const charLogic = getCharacterLogic(player.characterType);
+                const wasHoldingAbility = player.isHoldingAbility;
+
                 BaseCharacter.updateTimers(player);
 
-                const charLogic = getCharacterLogic(player.characterType);
+                // Agar stamina tugab, updateTimers o'zi majburiy o'chirgan bo'lsa
+                // (masalan, Samuray tezligini SHIFT qo'yib yubormasdan tugatgan bo'lsa),
+                // personajning shaxsiy effektini ham darhol bekor qilishimiz kerak,
+                // aks holda tezlik/ko'rinmaslik "yopishib qolib" davom etaveradi
+                if (wasHoldingAbility && !player.isHoldingAbility) {
+                    charLogic.releaseHeldAbility(player, room);
+                }
 
                 // SHIFT ushlab turilgan bo'lsa, har tikda personajning maxsus
                 // effektini qo'llaymiz (ko'rinmaslik, tezlik, muzlatish va h.k.)
@@ -47,7 +56,7 @@ export class GameEngine {
                 // (stamina va cooldown yetarli bo'lgandagina zarba beriladi)
                 if (player.isHoldingAttack) {
                     if (player.attackCooldown <= 0 && player.stamina >= charLogic.attackStaminaCost) {
-                        player.stamina -= charLogic.attackStaminaCost;
+                        BaseCharacter.spendStamina(player, charLogic.attackStaminaCost);
                         player.attackCooldown = BaseCharacter.ATTACK_COOLDOWN_TICKS;
                         charLogic.handleAttack(player, room, player.lastAttackAngle);
                     }

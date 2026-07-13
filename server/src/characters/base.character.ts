@@ -12,36 +12,37 @@ export abstract class BaseCharacter {
     // (Ritsar/Samuray: sekin ketadi, Kamonchi: sal sekin, Sehrgar: tez ketadi)
     public attackStaminaCost: number = BaseCharacter.ATTACK_STAMINA_COST;
 
-    // Har bir kadrda taymerlarni yangilash: cooldown, stamina drenaji va tiklanish kechikishi
+    // Har bir kadrda taymerlarni yangilash: cooldown va stamina tiklanish kechikishi
     public static updateTimers(player: PlayerState): void {
         if (player.attackCooldown > 0) player.attackCooldown--;
 
-        let isDraining = false;
-
         // SHIFT (qobiliyat) ushlab turilsa - BARCHA personajlar uchun stamina ketadi
         if (player.isHoldingAbility) {
-            player.stamina = Math.max(0, player.stamina - this.ABILITY_DRAIN_PER_TICK);
-            isDraining = true;
+            this.spendStamina(player, this.ABILITY_DRAIN_PER_TICK);
             if (player.stamina <= 0) {
                 player.isHoldingAbility = false; // Stamina tugasa majburiy o'chadi
+                // DIQQAT: personajning effektini (tezlik/ko'rinmaslik/muzlatish) bekor qilish
+                // GameEngine ichida amalga oshiriladi, chunki bu yerda charLogic'ga
+                // to'g'ridan-to'g'ri kirish yo'q
             }
         }
 
-        // ENTER (hujum) ushlab turilsa ham, tiklanish kechiktiriladi
-        // (har bir zarbaning o'zi stamina yeydi, buni RoomManager.handlePlayerAttack ichida ko'ramiz)
-        if (player.isHoldingAttack) {
-            isDraining = true;
-        }
-
-        if (isDraining) {
-            // Faol ishlatilayotgan vaqtda kechikish hisoblagichi har doim to'lib turadi
-            player.staminaRegenDelay = this.REGEN_DELAY_TICKS;
-        } else if (player.staminaRegenDelay > 0) {
-            // Qo'yib yuborilgandan keyin ozgina kutish kerak, tiklanish darrov boshlanmaydi
+        // MUHIM: endi tiklanish kechikishi FAQAT stamina haqiqatan sarflanganda
+        // yangilanadi (spendStamina orqali), shunchaki tugma bosib turilgani uchun
+        // emas. Aks holda: Enter tugmasi stamina tugagandan keyin ham bosib
+        // turilsa (zarba bermasa ham), tiklanish abadiy bloklanib qolar edi.
+        if (player.staminaRegenDelay > 0) {
             player.staminaRegenDelay--;
         } else if (player.stamina < 100) {
             player.stamina = Math.min(100, player.stamina + this.STAMINA_REGEN_PER_TICK);
         }
+    }
+
+    // Stamina sarflanganda shu yerdan chaqiriladi - tiklanish kechikishini ham
+    // avtomatik yangilaydi (haqiqiy sarflanish bo'lmasa, tiklanish bloklanmaydi)
+    public static spendStamina(player: PlayerState, amount: number): void {
+        player.stamina = Math.max(0, player.stamina - amount);
+        player.staminaRegenDelay = this.REGEN_DELAY_TICKS;
     }
 
     // Har bir personaj o'zicha hujum qiladi (Abstract funksiyalar)
